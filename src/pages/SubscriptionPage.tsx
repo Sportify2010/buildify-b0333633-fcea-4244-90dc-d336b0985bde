@@ -1,152 +1,154 @@
 
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
-import { processPayment } from '../lib/supabase'
-import { PAYMENT_METHODS } from '../types'
-import { Building, CreditCard, PaypalLogo, Check } from 'lucide-react'
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { useToast } from '../components/ui/use-toast';
+import { CreditCard, Building, Check } from 'lucide-react';
+import PaypalIcon from '../components/icons/PaypalIcon';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 
-export default function SubscriptionPage() {
-  const [selectedMethod, setSelectedMethod] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
-  const { refreshSubscription } = useAuth()
-  const navigate = useNavigate()
+const SubscriptionPage: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<string>('card');
 
-  const handlePayment = async () => {
-    if (!selectedMethod) {
-      setError('Please select a payment method')
-      return
+  const handleSubscribe = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to subscribe",
+        variant: "destructive",
+      });
+      return;
     }
-    
+
+    setIsProcessing(true);
+
     try {
-      setError(null)
-      setLoading(true)
-      
-      // Process payment through Supabase edge function
-      await processPayment(selectedMethod)
-      
-      // Update subscription status in auth context
-      await refreshSubscription()
-      
-      setSuccess(true)
-      
-      // Redirect to dashboard after successful payment
-      setTimeout(() => {
-        navigate('/dashboard')
-      }, 3000)
-    } catch (error) {
-      console.error('Payment error:', error)
-      setError('Failed to process payment. Please try again.')
-    } finally {
-      setLoading(false)
-    }
-  }
+      const { data, error } = await supabase.functions.invoke('process-payment', {
+        body: {
+          payment_method: paymentMethod,
+          payment_id: `sim_${Date.now()}`, // Simulated payment ID
+          amount: 60,
+          currency: 'THB'
+        }
+      });
 
-  const getPaymentIcon = (method: string) => {
-    switch (method) {
-      case 'bank_transfer':
-        return <Building size={24} />
-      case 'card':
-        return <CreditCard size={24} />
-      case 'paypal':
-        return <PaypalLogo size={24} />
-      default:
-        return null
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Subscription successful!",
+        description: "You now have access to all premium content",
+        variant: "default",
+      });
+
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Subscription error:', error);
+      toast({
+        title: "Subscription failed",
+        description: "There was an error processing your payment. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
     }
-  }
+  };
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="bg-primary text-white p-6">
-          <h1 className="text-2xl font-bold">Subscribe to Sportify</h1>
-          <p className="mt-2">Get unlimited access to all sports content</p>
-        </div>
-        
-        <div className="p-6">
-          {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-              {error}
-            </div>
-          )}
-          
-          {success && (
-            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-              Payment successful! You now have access to all Sportify content.
-              Redirecting to dashboard...
-            </div>
-          )}
-          
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">Subscription Details</h2>
-            <div className="bg-gray-100 p-4 rounded-lg">
-              <div className="flex justify-between items-center mb-2">
-                <span className="font-medium">Sportify Premium</span>
-                <span className="font-bold text-xl">฿60</span>
-              </div>
-              <p className="text-gray-600 text-sm">Monthly subscription</p>
-              <ul className="mt-4 space-y-2">
-                <li className="flex items-center text-sm">
-                  <Check size={16} className="text-green-500 mr-2" />
-                  Access to all sports content
-                </li>
-                <li className="flex items-center text-sm">
-                  <Check size={16} className="text-green-500 mr-2" />
-                  High-quality streaming (1080p/60fps or 4K)
-                </li>
-                <li className="flex items-center text-sm">
-                  <Check size={16} className="text-green-500 mr-2" />
-                  Favorite sports and teams
-                </li>
-                <li className="flex items-center text-sm">
-                  <Check size={16} className="text-green-500 mr-2" />
-                  Event notifications
-                </li>
-              </ul>
-            </div>
-          </div>
-          
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">Select Payment Method</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {PAYMENT_METHODS.map((method) => (
-                <div
-                  key={method.id}
-                  onClick={() => setSelectedMethod(method.id)}
-                  className={`border rounded-lg p-4 cursor-pointer transition ${
-                    selectedMethod === method.id
-                      ? 'border-primary bg-primary/5'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center">
-                    <div className="mr-3">
-                      {getPaymentIcon(method.id)}
-                    </div>
-                    <div>
-                      <h3 className="font-medium">{method.name}</h3>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          <button
-            onClick={handlePayment}
-            disabled={loading || success || !selectedMethod}
-            className="w-full bg-primary text-white font-semibold py-3 px-4 rounded-md hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50"
-          >
-            {loading ? 'Processing Payment...' : 'Pay ฿60'}
-          </button>
-          
-          <p className="mt-4 text-sm text-gray-500 text-center">
-            By subscribing, you agree to our Terms of Service and Privacy Policy.
-          </p>
-        </div>
+    <div className="container max-w-4xl py-10">
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold">Subscribe to Sportify Premium</h1>
+        <p className="text-muted-foreground mt-2">
+          Get unlimited access to all sports content in high quality
+        </p>
       </div>
+
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle>Premium Subscription</CardTitle>
+          <CardDescription>
+            Watch all sports events in HD and 4K quality
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-6">
+            <div className="flex justify-center">
+              <div className="text-center">
+                <div className="text-4xl font-bold">฿60<span className="text-lg font-normal text-muted-foreground">/month</span></div>
+                <p className="text-muted-foreground">Approximately $1.86 USD</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Check className="h-5 w-5 text-green-500" />
+                <span>Access to all live sports events</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="h-5 w-5 text-green-500" />
+                <span>HD and 4K streaming quality</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="h-5 w-5 text-green-500" />
+                <span>Watch on any device</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="h-5 w-5 text-green-500" />
+                <span>No ads during streaming</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="h-5 w-5 text-green-500" />
+                <span>Event notifications</span>
+              </div>
+            </div>
+
+            <Tabs defaultValue="card" onValueChange={setPaymentMethod}>
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="card">
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Card
+                </TabsTrigger>
+                <TabsTrigger value="bank_transfer">
+                  <Building className="h-4 w-4 mr-2" />
+                  Bank
+                </TabsTrigger>
+                <TabsTrigger value="paypal">
+                  <PaypalIcon className="h-4 w-4 mr-2" />
+                  PayPal
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="card" className="mt-4">
+                <p className="text-sm text-muted-foreground">Pay with your credit or debit card.</p>
+              </TabsContent>
+              <TabsContent value="bank_transfer" className="mt-4">
+                <p className="text-sm text-muted-foreground">Pay directly from your bank account.</p>
+              </TabsContent>
+              <TabsContent value="paypal" className="mt-4">
+                <p className="text-sm text-muted-foreground">Pay using your PayPal account.</p>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </CardContent>
+        <CardFooter>
+          <Button 
+            className="w-full" 
+            onClick={handleSubscribe}
+            disabled={isProcessing}
+          >
+            {isProcessing ? "Processing..." : "Subscribe Now"}
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
-  )
-}
+  );
+};
+
+export default SubscriptionPage;
